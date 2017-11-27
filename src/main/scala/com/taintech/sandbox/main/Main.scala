@@ -123,9 +123,13 @@ object Main extends App with AkkaStreamsQuickstartGuide {
   val broadcastTick: RunnableGraph[Source[String, NotUsed]] =
     tick.toMat(BroadcastHub.sink(bufferSize = 256))(Keep.right)
 
+  val broadcastHubSource = broadcastTick.run()
+
   val sharedKillSwitch = KillSwitches.shared("my-kill-switch")
   val tickResults1 =
-    tick.via(sharedKillSwitch.flow).runForeach(tick => println(s"I : $tick"))
+    broadcastHubSource
+      .via(sharedKillSwitch.flow)
+      .runForeach(tick => println(s"I : $tick"))
 
 //  val applicativeExp2 = done <*> (result <*> (tweetsDone <*> (factorials2Result <*> (slowFacts map identity))))
 
@@ -137,7 +141,9 @@ object Main extends App with AkkaStreamsQuickstartGuide {
 
   val scheduled = KillSwitches.shared("my-kill-switch-scheduled")
   actorSystem.scheduler.scheduleOnce(4.seconds) {
-    tick.via(scheduled.flow).runForeach(tick => println(s"II : $tick"))
+    broadcastHubSource
+      .via(scheduled.flow)
+      .runForeach(tick => println(s"II : $tick"))
   }
   actorSystem.scheduler.scheduleOnce(7.seconds) {
     println("Scheduled kill switch...")
